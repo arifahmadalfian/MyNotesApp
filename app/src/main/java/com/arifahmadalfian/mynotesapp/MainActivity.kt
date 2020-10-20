@@ -1,12 +1,16 @@
 package com.arifahmadalfian.mynotesapp
 
 import android.content.Intent
+import android.database.ContentObserver
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.PersistableBundle
 import android.view.View
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.arifahmadalfian.mynotesapp.adapter.NoteAdapter
+import com.arifahmadalfian.mynotesapp.db.DatabaseContract.NoteColumns.Companion.CONTENT_URI
 import com.arifahmadalfian.mynotesapp.db.NoteHelper
 import com.arifahmadalfian.mynotesapp.entity.Note
 import com.arifahmadalfian.mynotesapp.helper.MappingHelper
@@ -42,8 +46,16 @@ class MainActivity : AppCompatActivity() {
             startActivityForResult(intent, NoteAddUpdateActivity.REQUEST_ADD)
         }
 
-        noteHelper = NoteHelper.getInstance(applicationContext)
-        noteHelper.open()
+        val handlerThread = HandlerThread("DataObserver")
+        handlerThread.start()
+        val handler = Handler(handlerThread.looper)
+        val myObserver = object : ContentObserver(handler) {
+            override fun onChange(self: Boolean) {
+                loadNotesAsync()
+            }
+        }
+
+        contentResolver.registerContentObserver(CONTENT_URI, true, myObserver)
 
         if (savedInstanceState == null) {
             //proses ambil data
@@ -65,7 +77,8 @@ class MainActivity : AppCompatActivity() {
         GlobalScope.launch(Dispatchers.Main) {
             progressbar.visibility = View.VISIBLE
             val defferdNotes = async(Dispatchers.IO) {
-                val cursor = noteHelper.queryALL()
+                //val cursor = noteHelper.queryALL()
+                val cursor = contentResolver?.query(CONTENT_URI, null, null, null, null)
                 MappingHelper.mapCursorToArrayList(cursor)
             }
             progressbar.visibility = View.INVISIBLE

@@ -2,6 +2,7 @@ package com.arifahmadalfian.mynotesapp
 
 import android.content.ContentValues
 import android.content.Intent
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.Menu
@@ -10,10 +11,13 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.arifahmadalfian.mynotesapp.db.DatabaseContract
+import com.arifahmadalfian.mynotesapp.db.DatabaseContract.NoteColumns.Companion.CONTENT_URI
 import com.arifahmadalfian.mynotesapp.db.DatabaseContract.NoteColumns.Companion.DATE
 import com.arifahmadalfian.mynotesapp.db.NoteHelper
 import com.arifahmadalfian.mynotesapp.entity.Note
+import com.arifahmadalfian.mynotesapp.helper.MappingHelper
 import kotlinx.android.synthetic.main.activity_note_add_update.*
+import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -34,14 +38,11 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
     private var isEdit = false
     private var note: Note? = null
     private var position: Int = 0
-    private lateinit var noteHelper: NoteHelper
+    private lateinit var uriWithId: Uri
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_note_add_update)
-
-        noteHelper = NoteHelper.getInstance(applicationContext)
-        noteHelper.open()
 
         note = intent.getParcelableExtra(EXTRA_NOTE)
         if (note != null) {
@@ -55,6 +56,16 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
         val btnTitle: String
 
         if (isEdit) {
+
+            // Uri yang di dapatkan disini akan digunakan untuk ambil data dari provider
+            // content://com.arifahmadalfian.mynotesapp/note/id
+            uriWithId = Uri.parse(CONTENT_URI.toString() + "/" + note?.id)
+
+            val cursor = contentResolver.query(uriWithId, null, null, null, null)
+            if (cursor != null) {
+                note = MappingHelper.mapCursorToObject(cursor)
+                cursor.close()
+            }
             actionBarTitle = "Ubah"
             btnTitle = "Update"
 
@@ -97,25 +108,19 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
             values.put(DatabaseContract.NoteColumns.DESCRIPTION, description)
 
             if (isEdit) {
-                val result = noteHelper.update(note?.id.toString(), values).toLong()
-                if (result > 0) {
-                    setResult(RESULT_UPDATE, intent)
-                    finish()
-                } else {
-                    Toast.makeText(this@NoteAddUpdateActivity, "Gagal Update data", Toast.LENGTH_SHORT).show()
-                }
+                // Gunakan uriwithId untuk update
+                // content: //com.arifahmadalfian.mynotesapp/note
+                contentResolver.update(uriWithId, values, null, null)
+                Toast.makeText(this@NoteAddUpdateActivity, "Satu Item berhasil diedit", Toast.LENGTH_SHORT).show()
+                finish()
             } else {
-                note?.date = getCurrentDate()
+                //note?.date = getCurrentDate()
                 values.put(DATE, getCurrentDate())
-                val result = noteHelper.insert(values)
-
-                if (result > 0) {
-                    note?.id = result.toInt()
-                    setResult(RESULT_ADD, intent)
-                    finish()
-                } else {
-                    Toast.makeText(this@NoteAddUpdateActivity, "Gagal Menambah data", Toast.LENGTH_SHORT).show()
-                }
+                // Gunakan content uri untuk insert
+                //content://com.arifahmadalfian.mynotessapp/note/
+                contentResolver.insert(CONTENT_URI, values)
+                Toast.makeText(this@NoteAddUpdateActivity, "Satu Item berhasil disimpan", Toast.LENGTH_SHORT).show()
+                finish()
             }
         }
     }
@@ -168,15 +173,11 @@ class NoteAddUpdateActivity : AppCompatActivity(), View.OnClickListener {
                 if (isDialogClose) {
                     finish()
                 } else {
-                    val result = noteHelper.deleteById(note?.id.toString()).toLong()
-                    if (result > 0) {
-                        val intent = Intent()
-                        intent.putExtra(EXTRA_POSITION, position)
-                        setResult(RESULT_DELETE, intent)
-                        finish()
-                    } else {
-                        Toast.makeText(this@NoteAddUpdateActivity, "Gagal Menghapus data", Toast.LENGTH_SHORT).show()
-                    }
+                    // gunakan uriwithid dari intent activiti ini
+                    //content://com.arifahmadalfian.mynotesapp/note/id
+                    contentResolver.delete(uriWithId, null, null)
+                    Toast.makeText(this@NoteAddUpdateActivity, "Satu Item berhasil dihapus", Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             }
             .setNegativeButton("Tidak") { dialog, id -> dialog.cancel() }
